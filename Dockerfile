@@ -1,16 +1,19 @@
-FROM node:22-bookworm-slim AS base
+FROM node:24-bookworm-slim AS base
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl gnupg poppler-utils tesseract-ocr tesseract-ocr-eng tesseract-ocr-mar tesseract-ocr-hin tar coreutils \
   && curl -fsSL https://pgp.mongodb.com/server-7.0.asc | gpg --dearmor -o /usr/share/keyrings/mongodb-server-7.0.gpg \
   && echo "deb [ arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/mongodb-server-7.0.gpg ] https://repo.mongodb.org/apt/debian bookworm/mongodb-org/7.0 main" > /etc/apt/sources.list.d/mongodb-org-7.0.list \
-  && apt-get update && apt-get install -y --no-install-recommends mongodb-database-tools rclone \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends mongodb-database-tools rclone \
   && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
 FROM base AS build
 COPY package.json ./
+COPY package-lock.json ./
 COPY server/package.json server/package.json
 COPY client/package.json client/package.json
-RUN npm install --no-audit --no-fund
+
+RUN npm ci --no-audit --no-fund
 COPY server ./server
 COPY client ./client
 COPY scripts ./scripts
