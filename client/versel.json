@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "https://salary-management-system-677g.onrender.com/api/$1"
+    },
+    {
+      "source": "/site-assets/(.*)",
+      "destination": "https://salary-management-system-677g.onrender.com/site-assets/$1"
+    }
+  ]
+}
