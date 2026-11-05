@@ -1,6 +1,7 @@
 import nodemailer from "nodemailer";
 import twilio from "twilio";
 import { getSetting } from "./settings.js";
+import { testGmailProvider, sendGmailMessage } from "./gmailService.js";
 
 let cachedEmailTransport;
 let cachedTwilioClient;
@@ -24,15 +25,15 @@ function render(template, vars) {
     });
 }
 
-function emailProviderEnabled() {
-  return String(process.env.EMAIL_PROVIDER || "").toLowerCase() === "smtp";
+function getEmailProvider() {
+  return String(process.env.EMAIL_PROVIDER || "smtp")
+    .trim()
+    .toLowerCase();
 }
 
 function getEmailTransport() {
-  if (!emailProviderEnabled()) {
-    throw new Error(
-      "Email provider is not set to SMTP. Set EMAIL_PROVIDER=smtp.",
-    );
+  if (getEmailProvider() !== "smtp") {
+    throw new Error("SMTP transport is not selected.");
   }
 
   if (!cachedEmailTransport) {
@@ -44,7 +45,6 @@ function getEmailTransport() {
     }
 
     const username = process.env.SMTP_USER || process.env.SMTP_USERNAME;
-
     const password = process.env.SMTP_PASSWORD;
 
     if (username && !password) {
@@ -78,14 +78,25 @@ function getEmailTransport() {
 }
 
 export async function testEmailProvider() {
-  const from = process.env.SMTP_FROM || process.env.FROM_EMAIL;
+  const provider = getEmailProvider();
 
-  if (!from) {
-    throw new Error("Provider not configured: SMTP_FROM");
+  if (provider === "gmail-api") {
+    return testGmailProvider();
   }
 
-  const transport = getEmailTransport();
-  return transport.verify();
+  if (provider === "smtp") {
+    const from = process.env.SMTP_FROM || process.env.FROM_EMAIL;
+
+    if (!from) {
+      throw new Error("Provider not configured: SMTP_FROM");
+    }
+
+    return getEmailTransport().verify();
+  }
+
+  throw new Error(
+    `Unsupported EMAIL_PROVIDER: ${provider}. Use smtp or gmail-api.`,
+  );
 }
 
 export async function testSmsProvider() {
@@ -128,37 +139,53 @@ export async function testWhatsAppProvider() {
 }
 
 export async function sendEmail({ to, subject, body }) {
-  if (!emailProviderEnabled()) {
-    throw new Error(
-      "Email provider is not set to SMTP. Set EMAIL_PROVIDER=smtp.",
-    );
-  }
-
-  const from = process.env.SMTP_FROM || process.env.FROM_EMAIL;
-
-  if (!from) {
-    throw new Error("Provider not configured: SMTP_FROM");
-  }
+  const provider = getEmailProvider();
 
   if (!to || !String(to).trim()) {
     throw new Error("A recipient email address is required.");
   }
 
-  const transport = getEmailTransport();
+  let result;
 
-  const result = await transport.sendMail({
-    from,
-    to,
-    subject: subject || "Salary Notification",
-    text: body || "",
-  });
+  if (provider === "gmail-api") {
+    result = await sendGmailMessage({
+      to,
+      subject: subject || "Salary Notification",
+      text: body || "",
+    });
+  } else if (provider === "smtp") {
+    const from = process.env.SMTP_FROM || process.env.FROM_EMAIL;
+
+    if (!from) {
+      throw new Error("Provider not configured: SMTP_FROM");
+    }
+
+    const transport = getEmailTransport();
+
+    const smtpResult = await transport.sendMail({
+      from,
+      to,
+      subject: subject || "Salary Notification",
+      text: body || "",
+    });
+
+    result = {
+      provider: "smtp",
+      providerMessageId: smtpResult.messageId,
+      accepted: (smtpResult.accepted || []).length > 0,
+    };
+  } else {
+    throw new Error(
+      `Unsupported EMAIL_PROVIDER: ${provider}. Use smtp or gmail-api.`,
+    );
+  }
 
   const pricing = await getSetting("providerPricing", {});
 
   return {
-    provider: "smtp",
-    providerMessageId: result.messageId,
-    accepted: (result.accepted || []).length > 0,
+    provider: result.provider,
+    providerMessageId: result.providerMessageId,
+    accepted: result.accepted,
     cost: Number(
       pricing.emailCostPerMessage ?? process.env.EMAIL_COST_PER_MESSAGE ?? 0,
     ),
