@@ -1,5 +1,5 @@
-import crypto from 'node:crypto';
-import mongoose from 'mongoose';
+import crypto from "node:crypto";
+import mongoose from "mongoose";
 import {
   Campaign,
   DispatchOutbox,
@@ -9,21 +9,21 @@ import {
   Template,
   SystemSetting,
   UsageRecord,
-  SiteContent
-} from '../models/index.js';
-import { buildMessage } from './notifications.js';
-import { getNotificationQueue } from './queue.js';
-import { getSetting } from './settings.js';
-import { audit } from '../utils/audit.js';
+  SiteContent,
+} from "../models/index.js";
+import { buildMessage } from "./notifications.js";
+import { getNotificationQueue } from "./queue.js";
+import { getSetting } from "./settings.js";
+import { audit } from "../utils/audit.js";
 
-const makeRef = prefix =>
-  `${prefix}-${new Date().toISOString().slice(0, 10).replaceAll('-', '')}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+const makeRef = (prefix) =>
+  `${prefix}-${new Date().toISOString().slice(0, 10).replaceAll("-", "")}-${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
 
 function snapshotHash(payload) {
   return crypto
-    .createHash('sha256')
+    .createHash("sha256")
     .update(JSON.stringify(payload))
-    .digest('hex');
+    .digest("hex");
 }
 
 function httpError(message, status = 400) {
@@ -31,22 +31,24 @@ function httpError(message, status = 400) {
 }
 
 export async function createCampaignFromUpload(req, uploadId, title, channels) {
-  const allowedChannels = ['email', 'sms', 'whatsapp'];
+  const allowedChannels = ["email", "sms", "whatsapp"];
 
   if (
     !Array.isArray(channels) ||
     !channels.length ||
-    channels.some(channel => !allowedChannels.includes(channel)) ||
+    channels.some((channel) => !allowedChannels.includes(channel)) ||
     new Set(channels).size !== channels.length
   ) {
-    throw httpError('Select one or more valid notification channels');
+    throw httpError("Select one or more valid notification channels");
   }
 
-  const idempotencyKey = String(req.get?.('idempotency-key') || '').trim().slice(0, 200);
+  const idempotencyKey = String(req.get?.("idempotency-key") || "")
+    .trim()
+    .slice(0, 200);
   if (idempotencyKey) {
     const existing = await Campaign.findOne({
       owner: req.user.id,
-      idempotencyKey
+      idempotencyKey,
     });
     if (existing) return existing;
   }
@@ -54,135 +56,138 @@ export async function createCampaignFromUpload(req, uploadId, title, channels) {
   const upload = await Upload.findOne({
     _id: uploadId,
     uploadedBy: req.user.id,
-    status: 'review'
+    status: "review",
   });
 
   if (!upload) {
-    throw httpError('Upload not found or not ready for submission', 404);
+    throw httpError("Upload not found or not ready for submission", 404);
   }
 
   const linkedCampaign = await Campaign.findOne({
     upload: upload._id,
     status: {
       $in: [
-        'draft',
-        'awaiting_approval',
-        'approved',
-        'scheduled',
-        'sending',
-        'paused',
-        'cancelling'
-      ]
-    }
-  }).select('_id reference status').lean();
+        "draft",
+        "awaiting_approval",
+        "approved",
+        "scheduled",
+        "sending",
+        "paused",
+        "cancelling",
+      ],
+    },
+  })
+    .select("_id reference status")
+    .lean();
 
   if (linkedCampaign) {
     throw httpError(
       `This upload is already linked to active campaign ${linkedCampaign.reference}`,
-      409
+      409,
     );
   }
 
   const allRecords = await ExtractedRecord.find({
-    upload: upload._id
+    upload: upload._id,
   }).lean();
 
-  const records = allRecords.filter(record => !record.excluded);
+  const records = allRecords.filter((record) => !record.excluded);
 
   if (!records.length) {
-    throw httpError('No included recipient records are available');
+    throw httpError("No included recipient records are available");
   }
 
-  const invalid = records.filter(record =>
-    !record.valid ||
-    record.errors?.length ||
-    !String(record.name || '').trim() ||
-    !String(record.email || '').trim()
+  const invalid = records.filter(
+    (record) =>
+      !record.valid ||
+      record.errors?.length ||
+      !String(record.name || "").trim() ||
+      !String(record.email || "").trim(),
   );
 
   if (invalid.length) {
     throw httpError(
-      `${invalid.length} record(s) still need correction or admin exclusion before campaign submission`
+      `${invalid.length} record(s) still need correction or admin exclusion before campaign submission`,
     );
   }
 
-  const emails = records.map(record =>
-    String(record.email || '').trim().toLowerCase()
+  const emails = records.map((record) =>
+    String(record.email || "")
+      .trim()
+      .toLowerCase(),
   );
 
   if (emails.some((email, index) => emails.indexOf(email) !== index)) {
     throw httpError(
-      'Duplicate email addresses must be resolved before campaign submission'
+      "Duplicate email addresses must be resolved before campaign submission",
     );
   }
 
   const uploadPolicy =
-    (await SystemSetting.findOne({ key: 'uploadPolicy' }).lean())?.value || {};
+    (await SystemSetting.findOne({ key: "uploadPolicy" }).lean())?.value || {};
 
   const maxRecipients = Math.min(
     1000,
-    Math.max(1, Number(uploadPolicy.maxRecipientsPerCampaign || 1000))
+    Math.max(1, Number(uploadPolicy.maxRecipientsPerCampaign || 1000)),
   );
 
   const recipients = [];
 
   for (const record of records) {
-    const email = String(record.email || '').trim().toLowerCase();
-    const phone = String(record.phone || '').trim();
+    const email = String(record.email || "")
+      .trim()
+      .toLowerCase();
+    const phone = String(record.phone || "").trim();
 
     if (
-      channels.includes('email') &&
+      channels.includes("email") &&
       !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
     ) {
       throw httpError(
-        `A valid email address is required for ${record.name || 'each recipient'}`
+        `A valid email address is required for ${record.name || "each recipient"}`,
       );
     }
 
     if (
-      (channels.includes('sms') || channels.includes('whatsapp')) &&
+      (channels.includes("sms") || channels.includes("whatsapp")) &&
       !/^\+[1-9]\d{7,14}$/.test(phone)
     ) {
       throw httpError(
-        `A valid international-format mobile number is required for ${record.name || email} when SMS or WhatsApp is selected`
+        `A valid international-format mobile number is required for ${record.name || email} when SMS or WhatsApp is selected`,
       );
     }
 
     if (
       record.salaryAmount === undefined ||
       record.salaryAmount === null ||
-      String(record.salaryAmount).trim() === ''
+      String(record.salaryAmount).trim() === ""
     ) {
-      throw httpError(
-        `Salary amount missing for ${record.name || email}`
-      );
+      throw httpError(`Salary amount missing for ${record.name || email}`);
     }
 
     recipients.push({
       name: String(record.name).trim(),
       email,
       phone,
-      language: record.language || 'en',
+      language: record.language || "en",
       salaryAmount: record.salaryAmount,
       salaryPeriod: record.salaryPeriod,
       salaryDetails: record.raw || {},
       sourceRecord: record._id,
       sourceRow: record.sourceRow,
       sourceSheet: record.sourceSheet,
-      exceptionApprovedBy: record.exceptionApprovedBy
+      exceptionApprovedBy: record.exceptionApprovedBy,
     });
   }
 
   if (!recipients.length) {
     throw httpError(
-      'No eligible salary records. Correct the uploaded records and contacts first.'
+      "No eligible salary records. Correct the uploaded records and contacts first.",
     );
   }
 
   if (recipients.length > maxRecipients) {
-    throw httpError(
-      `Campaign limit is ${maxRecipients} distinct recipients`
-    );
+    throw httpError(`Campaign limit is ${maxRecipients} distinct recipients`);
   }
 
   const session = await mongoose.startSession();
@@ -193,41 +198,43 @@ export async function createCampaignFromUpload(req, uploadId, title, channels) {
       const claimedUpload = await Upload.findOneAndUpdate(
         {
           _id: upload._id,
-          status: 'review'
+          status: "review",
         },
-        { $set: { status: 'submitted' } },
-        { new: true, session }
+        { $set: { status: "submitted" } },
+        { new: true, session },
       );
 
       if (!claimedUpload) {
         throw httpError(
-          'This upload was submitted by another request. Reload the campaign list.',
-          409
+          "This upload was submitted by another request. Reload the campaign list.",
+          409,
         );
       }
 
       const created = await Campaign.create(
-        [{
-          reference: makeRef('SGGS-CAM'),
-          idempotencyKey: idempotencyKey || undefined,
-          title: String(title || upload.originalName).slice(0, 160),
-          owner: req.user.id,
-          ownerRole: req.user.role,
-          upload: upload._id,
-          channels,
-          recipients,
-          status: 'awaiting_approval',
-          counters: {
-            total: recipients.length * channels.length,
-            queued: 0,
-            sent: 0,
-            delivered: 0,
-            failed: 0,
-            bounced: 0,
-            unknown: 0
-          }
-        }],
-        { session }
+        [
+          {
+            reference: makeRef("SGGS-CAM"),
+            idempotencyKey: idempotencyKey || undefined,
+            title: String(title || upload.originalName).slice(0, 160),
+            owner: req.user.id,
+            ownerRole: req.user.role,
+            upload: upload._id,
+            channels,
+            recipients,
+            status: "awaiting_approval",
+            counters: {
+              total: recipients.length * channels.length,
+              queued: 0,
+              sent: 0,
+              delivered: 0,
+              failed: 0,
+              bounced: 0,
+              unknown: 0,
+            },
+          },
+        ],
+        { session },
       );
 
       [campaign] = created;
@@ -236,18 +243,11 @@ export async function createCampaignFromUpload(req, uploadId, title, channels) {
     await session.endSession();
   }
 
-  await audit(
-    req,
-    'campaign.submitted',
-    'campaign',
-    campaign._id,
-    'success',
-    {
-      reference: campaign.reference,
-      recipientCount: recipients.length,
-      channels: campaign.channels
-    }
-  );
+  await audit(req, "campaign.submitted", "campaign", campaign._id, "success", {
+    reference: campaign.reference,
+    recipientCount: recipients.length,
+    channels: campaign.channels,
+  });
 
   return campaign;
 }
@@ -257,32 +257,38 @@ export async function prepareCampaignSnapshot(campaign) {
   const versions = {};
 
   const homeContent = await SiteContent.findOne({
-    key: 'home',
-    status: 'published'
-  }).sort({ version: -1 }).lean();
+    key: "home",
+    status: "published",
+  })
+    .sort({ version: -1 })
+    .lean();
 
   const headerContent = await SiteContent.findOne({
-    key: 'header',
-    status: 'published'
-  }).sort({ version: -1 }).lean();
+    key: "header",
+    status: "published",
+  })
+    .sort({ version: -1 })
+    .lean();
 
   const collegeName =
     homeContent?.content?.collegeName ||
     headerContent?.content?.collegeName ||
-    'SGGS';
+    "SGGS";
 
   const languages = [
     ...new Set(
-      campaign.recipients.map(recipient => recipient.language || 'en')
-    )
+      campaign.recipients.map((recipient) => recipient.language || "en"),
+    ),
   ];
 
   const templateRows = await Template.find({
-    key: 'salary_notification',
+    key: "salary_notification",
     channel: { $in: campaign.channels },
     language: { $in: languages },
-    status: 'published'
-  }).sort({ version: -1 }).lean();
+    status: "published",
+  })
+    .sort({ version: -1 })
+    .lean();
 
   const templateMap = new Map();
 
@@ -298,50 +304,46 @@ export async function prepareCampaignSnapshot(campaign) {
     const recipient = campaign.recipients[i];
 
     for (const channel of campaign.channels) {
-      const language = recipient.language || 'en';
-      const template = templateMap.get(`${channel}:${language}`);
+      let configured = false;
 
-      if (!template) {
-        throw httpError(
-          `No published ${channel} template exists for language ${language}. Configure templates before approving this campaign.`
+      if (channel === "email") {
+        const emailProvider = String(process.env.EMAIL_PROVIDER || "smtp")
+          .trim()
+          .toLowerCase();
+
+        if (emailProvider === "gmail-api") {
+          configured = Boolean(
+            process.env.GMAIL_CLIENT_ID?.trim() &&
+            process.env.GMAIL_CLIENT_SECRET?.trim() &&
+            process.env.GMAIL_REFRESH_TOKEN?.trim() &&
+            (process.env.GMAIL_FROM?.trim() || process.env.GMAIL_USER?.trim()),
+          );
+        } else if (emailProvider === "smtp") {
+          configured = Boolean(
+            process.env.SMTP_HOST?.trim() &&
+            (process.env.SMTP_FROM?.trim() || process.env.FROM_EMAIL?.trim()),
+          );
+        }
+      } else if (channel === "sms") {
+        configured = Boolean(
+          process.env.TWILIO_ACCOUNT_SID?.trim() &&
+          process.env.TWILIO_AUTH_TOKEN?.trim() &&
+          process.env.TWILIO_SMS_FROM?.trim(),
+        );
+      } else if (channel === "whatsapp") {
+        configured = Boolean(
+          process.env.WHATSAPP_PHONE_NUMBER_ID?.trim() &&
+          process.env.WHATSAPP_ACCESS_TOKEN?.trim() &&
+          process.env.WHATSAPP_APP_SECRET?.trim() &&
+          process.env.WHATSAPP_GRAPH_VERSION?.trim(),
         );
       }
 
-      if (channel === 'whatsapp' && !template.whatsappTemplateName) {
+      if (!configured) {
         throw httpError(
-          `WhatsApp template for ${language} is missing an approved provider template name`
+          `The ${channel} provider is not configured. Configure and test it before approving this campaign.`,
         );
       }
-
-      const message = buildMessage(
-        template,
-        recipient,
-        campaign,
-        { collegeName, channel }
-      );
-
-      messages.push({
-        recipientIndex: i,
-        name: recipient.name,
-        email: recipient.email,
-        phone: recipient.phone,
-        channel,
-        language,
-        subject: message.subject,
-        body: message.body,
-        whatsappTemplateName: template.whatsappTemplateName || '',
-        whatsappLanguageCode:
-          template.whatsappLanguageCode ||
-          (language === 'en' ? 'en_US' : language),
-        variables: message.variables,
-        templateId: String(template._id),
-        templateVersion: template.version
-      });
-
-      versions[`${channel}:${language}`] = {
-        id: String(template._id),
-        version: template.version
-      };
     }
   }
 
@@ -350,18 +352,18 @@ export async function prepareCampaignSnapshot(campaign) {
   const snapshot = {
     reference: campaign.reference,
     version: campaign.version,
-    recipients: campaign.recipients.map(recipient => ({
+    recipients: campaign.recipients.map((recipient) => ({
       email: recipient.email,
       phone: recipient.phone,
       salaryAmount: recipient.salaryAmount?.toString?.(),
       salaryPeriod: recipient.salaryPeriod,
       language: recipient.language,
       sourceRow: recipient.sourceRow,
-      sourceSheet: recipient.sourceSheet
+      sourceSheet: recipient.sourceSheet,
     })),
     channels: campaign.channels,
     templateVersions: versions,
-    messageSnapshot
+    messageSnapshot,
   };
 
   return {
@@ -369,56 +371,49 @@ export async function prepareCampaignSnapshot(campaign) {
     versions,
     messageSnapshot,
     snapshot,
-    hash: snapshotHash(snapshot)
+    hash: snapshotHash(snapshot),
   };
 }
 
-export async function acknowledgeCampaignReview(
-  req,
-  campaignId,
-  expectedHash
-) {
+export async function acknowledgeCampaignReview(req, campaignId, expectedHash) {
   const campaign = await Campaign.findById(campaignId);
 
   if (!campaign) {
-    throw httpError('Campaign not found', 404);
+    throw httpError("Campaign not found", 404);
   }
 
-  if (campaign.status !== 'awaiting_approval') {
-    throw httpError(
-      'Only campaigns awaiting approval can be reviewed',
-      409
-    );
+  if (campaign.status !== "awaiting_approval") {
+    throw httpError("Only campaigns awaiting approval can be reviewed", 409);
   }
 
   const prepared = await prepareCampaignSnapshot(campaign);
 
   if (prepared.hash !== expectedHash) {
     throw httpError(
-      'The preview changed. Reload and review the current campaign version.',
-      409
+      "The preview changed. Reload and review the current campaign version.",
+      409,
     );
   }
 
   campaign.reviewAcknowledgement = {
     reviewedBy: req.user.id,
     reviewedAt: new Date(),
-    snapshotHash: prepared.hash
+    snapshotHash: prepared.hash,
   };
 
   await campaign.save();
 
   await audit(
     req,
-    'campaign.personalized_preview_reviewed',
-    'campaign',
+    "campaign.personalized_preview_reviewed",
+    "campaign",
     campaign._id,
-    'success',
+    "success",
     {
       reference: campaign.reference,
       version: campaign.version,
-      hash: prepared.hash
-    }
+      hash: prepared.hash,
+    },
   );
 
   return campaign;
@@ -428,22 +423,19 @@ export async function approveCampaign(req, campaignId, scheduleAt) {
   const campaign = await Campaign.findById(campaignId);
 
   if (!campaign) {
-    throw httpError('Campaign not found', 404);
+    throw httpError("Campaign not found", 404);
   }
 
-  if (campaign.status !== 'awaiting_approval') {
-    throw httpError(
-      'Only campaigns awaiting approval can be approved',
-      409
-    );
+  if (campaign.status !== "awaiting_approval") {
+    throw httpError("Only campaigns awaiting approval can be approved", 409);
   }
 
   const uploadPolicy =
-    (await SystemSetting.findOne({ key: 'uploadPolicy' }).lean())?.value || {};
+    (await SystemSetting.findOne({ key: "uploadPolicy" }).lean())?.value || {};
 
   const maxRecipients = Math.min(
     1000,
-    Math.max(1, Number(uploadPolicy.maxRecipientsPerCampaign || 1000))
+    Math.max(1, Number(uploadPolicy.maxRecipientsPerCampaign || 1000)),
   );
 
   if (
@@ -451,49 +443,52 @@ export async function approveCampaign(req, campaignId, scheduleAt) {
     campaign.recipients.length > maxRecipients
   ) {
     throw httpError(
-      `Campaign recipient count must be between 1 and ${maxRecipients}`
+      `Campaign recipient count must be between 1 and ${maxRecipients}`,
     );
   }
 
   const notificationPolicy =
-    (await SystemSetting.findOne({
-      key: 'notificationPolicy'
-    }).lean())?.value || {};
+    (
+      await SystemSetting.findOne({
+        key: "notificationPolicy",
+      }).lean()
+    )?.value || {};
 
-  const enabledChannels =
-    notificationPolicy.enabledChannels || ['email', 'sms', 'whatsapp'];
+  const enabledChannels = notificationPolicy.enabledChannels || [
+    "email",
+    "sms",
+    "whatsapp",
+  ];
 
-  if (
-    campaign.channels.some(channel => !enabledChannels.includes(channel))
-  ) {
+  if (campaign.channels.some((channel) => !enabledChannels.includes(channel))) {
     throw httpError(
-      'This campaign includes a channel disabled by the administrator'
+      "This campaign includes a channel disabled by the administrator",
     );
   }
 
   for (const channel of campaign.channels) {
     const configured =
-      channel === 'email'
+      channel === "email"
         ? Boolean(
             process.env.SMTP_HOST &&
-            (process.env.SMTP_FROM || process.env.FROM_EMAIL)
+            (process.env.SMTP_FROM || process.env.FROM_EMAIL),
           )
-        : channel === 'sms'
+        : channel === "sms"
           ? Boolean(
               process.env.TWILIO_ACCOUNT_SID &&
               process.env.TWILIO_AUTH_TOKEN &&
-              process.env.TWILIO_SMS_FROM
+              process.env.TWILIO_SMS_FROM,
             )
           : Boolean(
               process.env.WHATSAPP_PHONE_NUMBER_ID &&
               process.env.WHATSAPP_ACCESS_TOKEN &&
               process.env.WHATSAPP_APP_SECRET &&
-              process.env.WHATSAPP_GRAPH_VERSION
+              process.env.WHATSAPP_GRAPH_VERSION,
             );
 
     if (!configured) {
       throw httpError(
-        `The ${channel} provider is not configured. Configure and test it before approving this campaign.`
+        `The ${channel} provider is not configured. Configure and test it before approving this campaign.`,
       );
     }
   }
@@ -508,32 +503,36 @@ export async function approveCampaign(req, campaignId, scheduleAt) {
     const requestedSchedule = new Date(scheduleAt);
 
     if (!Number.isFinite(requestedSchedule.getTime())) {
-      throw httpError('Please select a valid campaign schedule time.');
+      throw httpError("Please select a valid campaign schedule time.");
     }
 
     chosenSchedule =
-      requestedSchedule.getTime() > Date.now()
-        ? requestedSchedule
-        : undefined;
+      requestedSchedule.getTime() > Date.now() ? requestedSchedule : undefined;
   }
 
   const prepared = await prepareCampaignSnapshot(campaign);
-  const pricing = await getSetting('providerPricing', {});
+  const pricing = await getSetting("providerPricing", {});
 
   const estimate = prepared.messages.reduce((sum, message) => {
-    if (message.channel === 'email') {
-      return sum + Number(
-        pricing.emailCostPerMessage ??
-        process.env.EMAIL_COST_PER_MESSAGE ??
-        0
+    if (message.channel === "email") {
+      return (
+        sum +
+        Number(
+          pricing.emailCostPerMessage ??
+            process.env.EMAIL_COST_PER_MESSAGE ??
+            0,
+        )
       );
     }
 
-    if (message.channel === 'whatsapp') {
-      return sum + Number(
-        pricing.whatsappCostPerMessage ??
-        process.env.WHATSAPP_COST_PER_MESSAGE ??
-        0
+    if (message.channel === "whatsapp") {
+      return (
+        sum +
+        Number(
+          pricing.whatsappCostPerMessage ??
+            process.env.WHATSAPP_COST_PER_MESSAGE ??
+            0,
+        )
       );
     }
 
@@ -541,18 +540,24 @@ export async function approveCampaign(req, campaignId, scheduleAt) {
     const length = message.body.length;
 
     const segments = gsm
-      ? (length <= 160 ? 1 : Math.ceil(length / 153))
-      : (length <= 70 ? 1 : Math.ceil(length / 67));
+      ? length <= 160
+        ? 1
+        : Math.ceil(length / 153)
+      : length <= 70
+        ? 1
+        : Math.ceil(length / 67);
 
-    return sum + segments * Number(
-      pricing.smsCostPerSegment ??
-      process.env.SMS_COST_PER_SEGMENT ??
-      0
+    return (
+      sum +
+      segments *
+        Number(
+          pricing.smsCostPerSegment ?? process.env.SMS_COST_PER_SEGMENT ?? 0,
+        )
     );
   }, 0);
 
   const costSetting = await SystemSetting.findOne({
-    key: 'costLimits'
+    key: "costLimits",
   }).lean();
 
   const limits = costSetting?.value || {};
@@ -562,22 +567,14 @@ export async function approveCampaign(req, campaignId, scheduleAt) {
     estimate > Number(limits.maxCampaignCostINR)
   ) {
     throw httpError(
-      `Estimated campaign cost ₹${estimate.toFixed(2)} exceeds the configured per-campaign limit`
+      `Estimated campaign cost ₹${estimate.toFixed(2)} exceeds the configured per-campaign limit`,
     );
   }
 
   if (Number(limits.monthlyBudgetINR) > 0) {
     const now = new Date();
-    const monthStart = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      1
-    );
-    const nextMonth = new Date(
-      now.getFullYear(),
-      now.getMonth() + 1,
-      1
-    );
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
     const [used, committed] = await Promise.all([
       UsageRecord.aggregate([
@@ -585,37 +582,32 @@ export async function approveCampaign(req, campaignId, scheduleAt) {
           $match: {
             occurredAt: { $gte: monthStart },
             reconciliationStatus: {
-              $in: ['estimated', 'reconciled']
-            }
-          }
+              $in: ["estimated", "reconciled"],
+            },
+          },
         },
         {
           $lookup: {
-            from: 'campaigns',
-            localField: 'campaign',
-            foreignField: '_id',
-            as: 'campaignDoc'
-          }
+            from: "campaigns",
+            localField: "campaign",
+            foreignField: "_id",
+            as: "campaignDoc",
+          },
         },
-        { $unwind: '$campaignDoc' },
+        { $unwind: "$campaignDoc" },
         {
           $match: {
-            'campaignDoc.status': {
-              $in: [
-                'completed',
-                'partial_failure',
-                'failed',
-                'cancelled'
-              ]
-            }
-          }
+            "campaignDoc.status": {
+              $in: ["completed", "partial_failure", "failed", "cancelled"],
+            },
+          },
         },
         {
           $group: {
             _id: null,
-            amount: { $sum: '$estimatedCost' }
-          }
-        }
+            amount: { $sum: "$estimatedCost" },
+          },
+        },
       ]),
       Campaign.aggregate([
         {
@@ -623,27 +615,27 @@ export async function approveCampaign(req, campaignId, scheduleAt) {
             _id: { $ne: campaign._id },
             $or: [
               {
-                status: 'approved',
-                createdAt: { $gte: monthStart }
+                status: "approved",
+                createdAt: { $gte: monthStart },
               },
-              { status: 'sending' },
+              { status: "sending" },
               {
-                status: 'scheduled',
+                status: "scheduled",
                 scheduleAt: {
                   $gte: monthStart,
-                  $lt: nextMonth
-                }
-              }
-            ]
-          }
+                  $lt: nextMonth,
+                },
+              },
+            ],
+          },
         },
         {
           $group: {
             _id: null,
-            amount: { $sum: '$estimatedCost' }
-          }
-        }
-      ])
+            amount: { $sum: "$estimatedCost" },
+          },
+        },
+      ]),
     ]);
 
     const totalCommitted =
@@ -653,7 +645,7 @@ export async function approveCampaign(req, campaignId, scheduleAt) {
 
     if (totalCommitted > Number(limits.monthlyBudgetINR)) {
       throw httpError(
-        'Estimated campaign cost would exceed the configured monthly budget'
+        "Estimated campaign cost would exceed the configured monthly budget",
       );
     }
   }
@@ -661,21 +653,20 @@ export async function approveCampaign(req, campaignId, scheduleAt) {
   if (
     !campaign.reviewAcknowledgement?.snapshotHash ||
     campaign.reviewAcknowledgement.snapshotHash !== prepared.hash ||
-    String(campaign.reviewAcknowledgement.reviewedBy) !==
-      String(req.user.id)
+    String(campaign.reviewAcknowledgement.reviewedBy) !== String(req.user.id)
   ) {
     throw httpError(
-      'Review every page of the personalized message preview and acknowledge it before approval.',
-      409
+      "Review every page of the personalized message preview and acknowledge it before approval.",
+      409,
     );
   }
 
   const approved = await Campaign.findOneAndUpdate(
     {
       _id: campaign._id,
-      status: 'awaiting_approval',
-      'reviewAcknowledgement.snapshotHash': prepared.hash,
-      'reviewAcknowledgement.reviewedBy': req.user.id
+      status: "awaiting_approval",
+      "reviewAcknowledgement.snapshotHash": prepared.hash,
+      "reviewAcknowledgement.reviewedBy": req.user.id,
     },
     {
       $set: {
@@ -685,23 +676,23 @@ export async function approveCampaign(req, campaignId, scheduleAt) {
         approval: {
           approvedBy: req.user.id,
           approvedAt: new Date(),
-          snapshotHash: prepared.hash
+          snapshotHash: prepared.hash,
         },
-        status: chosenSchedule ? 'scheduled' : 'approved',
+        status: chosenSchedule ? "scheduled" : "approved",
         scheduleAt: chosenSchedule,
-        dispatchEnqueuedAt: undefined
-      }
+        dispatchEnqueuedAt: undefined,
+      },
     },
     {
       new: true,
-      runValidators: true
-    }
+      runValidators: true,
+    },
   );
 
   if (!approved) {
     throw httpError(
-      'Campaign approval state changed. Reload and review the latest version.',
-      409
+      "Campaign approval state changed. Reload and review the latest version.",
+      409,
     );
   }
 
@@ -716,67 +707,75 @@ export async function approveCampaign(req, campaignId, scheduleAt) {
     {
       $set: {
         version: approved.version,
-        status: 'pending',
+        status: "pending",
         attempts: 0,
         nextAttemptAt: new Date(),
-        lastError: undefined
+        lastError: undefined,
       },
-      $setOnInsert: { campaign: approved._id }
+      $setOnInsert: { campaign: approved._id },
     },
-    { upsert: true }
+    { upsert: true },
   );
 
   try {
     await getNotificationQueue().add(
-      'dispatch-campaign',
+      "dispatch-campaign",
       {
         campaignId: String(approved._id),
-        version: approved.version
+        version: approved.version,
       },
       {
         jobId: `dispatch-${approved._id}-v${approved.version}`,
         delay,
-        removeOnComplete: true
-      }
+        removeOnComplete: true,
+      },
     );
     await Campaign.updateOne(
       { _id: approved._id, version: approved.version },
-      { $set: { dispatchEnqueuedAt: new Date() } }
+      { $set: { dispatchEnqueuedAt: new Date() } },
     );
     await DispatchOutbox.updateOne(
       { campaign: approved._id, version: approved.version },
-      { $set: { status: 'enqueued', enqueuedAt: new Date(), lastError: undefined } }
+      {
+        $set: {
+          status: "enqueued",
+          enqueuedAt: new Date(),
+          lastError: undefined,
+        },
+      },
     );
   } catch (error) {
     queueEnqueued = false;
     await DispatchOutbox.updateOne(
       { campaign: approved._id, version: approved.version },
       {
-        $set: { status: 'failed', lastError: String(error.message).slice(0, 500), nextAttemptAt: new Date(Date.now() + 60000) },
-        $inc: { attempts: 1 }
-      }
+        $set: {
+          status: "failed",
+          lastError: String(error.message).slice(0, 500),
+          nextAttemptAt: new Date(Date.now() + 60000),
+        },
+        $inc: { attempts: 1 },
+      },
     );
 
     console.error(
-      'Approved campaign dispatch enqueue deferred to queue reconciliation:',
-      error.message
+      "Approved campaign dispatch enqueue deferred to queue reconciliation:",
+      error.message,
     );
   }
 
   await audit(
     req,
-    queueEnqueued
-      ? 'campaign.approved'
-      : 'campaign.approved.queue_pending',
-    'campaign',
+    queueEnqueued ? "campaign.approved" : "campaign.approved.queue_pending",
+    "campaign",
     approved._id,
-    'success',
+    "success",
     {
       reference: approved.reference,
       version: approved.version,
       scheduleAt: approved.scheduleAt,
-      queueEnqueued
-    }
+      queueEnqueued,
+    },
   );
 
   return approved;
@@ -787,12 +786,9 @@ export async function createNewCampaignVersion(req, campaignId, updates) {
 
   if (
     !source ||
-    (
-      req.user.role !== 'admin' &&
-      String(source.owner) !== String(req.user.id)
-    )
+    (req.user.role !== "admin" && String(source.owner) !== String(req.user.id))
   ) {
-    throw httpError('Campaign not found', 404);
+    throw httpError("Campaign not found", 404);
   }
 
   const copy = source.toObject();
@@ -804,12 +800,12 @@ export async function createNewCampaignVersion(req, campaignId, updates) {
   delete copy.updatedAt;
   delete copy.idempotencyKey;
 
-  copy.reference = makeRef('SGGS-CAM');
+  copy.reference = makeRef("SGGS-CAM");
   copy.version = source.version + 1;
   copy.parentCampaign = source._id;
   copy.owner = req.user.id;
   copy.ownerRole = req.user.role;
-  copy.status = 'awaiting_approval';
+  copy.status = "awaiting_approval";
   copy.approval = {};
   copy.reviewAcknowledgement = {};
   copy.cancellationRequest = undefined;
@@ -829,7 +825,7 @@ export async function createNewCampaignVersion(req, campaignId, updates) {
     delivered: 0,
     failed: 0,
     bounced: 0,
-    unknown: 0
+    unknown: 0,
   };
 
   if (updates.title) {
@@ -837,15 +833,15 @@ export async function createNewCampaignVersion(req, campaignId, updates) {
   }
 
   if (updates.channels) {
-    const allowed = ['email', 'sms', 'whatsapp'];
+    const allowed = ["email", "sms", "whatsapp"];
 
     if (
       !Array.isArray(updates.channels) ||
       !updates.channels.length ||
-      updates.channels.some(channel => !allowed.includes(channel)) ||
+      updates.channels.some((channel) => !allowed.includes(channel)) ||
       new Set(updates.channels).size !== updates.channels.length
     ) {
-      throw httpError('Select valid notification channels');
+      throw httpError("Select valid notification channels");
     }
 
     copy.channels = updates.channels;
@@ -855,14 +851,14 @@ export async function createNewCampaignVersion(req, campaignId, updates) {
 
   await audit(
     req,
-    'campaign.version.created',
-    'campaign',
+    "campaign.version.created",
+    "campaign",
     newCampaign._id,
-    'success',
+    "success",
     {
       parent: source._id,
-      reference: newCampaign.reference
-    }
+      reference: newCampaign.reference,
+    },
   );
 
   return newCampaign;
@@ -872,26 +868,24 @@ export async function cancelCampaign(req, campaignId) {
   const campaign = await Campaign.findById(campaignId);
 
   if (!campaign) {
-    throw httpError('Campaign not found', 404);
+    throw httpError("Campaign not found", 404);
   }
 
   if (
-    req.user.role !== 'admin' &&
+    req.user.role !== "admin" &&
     String(campaign.owner) !== String(req.user.id)
   ) {
-    throw httpError('Campaign not found', 404);
+    throw httpError("Campaign not found", 404);
   }
 
-  if (
-    ['completed', 'cancelled', 'failed'].includes(campaign.status)
-  ) {
-    throw httpError('Campaign is already finished', 409);
+  if (["completed", "cancelled", "failed"].includes(campaign.status)) {
+    throw httpError("Campaign is already finished", 409);
   }
 
-  campaign.status = 'cancelling';
+  campaign.status = "cancelling";
 
   if (campaign.cancellationRequest) {
-    campaign.cancellationRequest.status = 'approved';
+    campaign.cancellationRequest.status = "approved";
   }
 
   await campaign.save();
@@ -899,24 +893,19 @@ export async function cancelCampaign(req, campaignId) {
   await DeliveryJob.updateMany(
     {
       campaign: campaign._id,
-      status: 'queued'
+      status: "queued",
     },
     {
-      $set: { status: 'cancelled' }
-    }
+      $set: { status: "cancelled" },
+    },
   );
 
-  campaign.status = 'cancelled';
+  campaign.status = "cancelled";
   campaign.completedAt = new Date();
 
   await campaign.save();
 
-  await audit(
-    req,
-    'campaign.cancelled',
-    'campaign',
-    campaign._id
-  );
+  await audit(req, "campaign.cancelled", "campaign", campaign._id);
 
   return campaign;
 }
