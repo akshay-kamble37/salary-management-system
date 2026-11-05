@@ -304,46 +304,48 @@ export async function prepareCampaignSnapshot(campaign) {
     const recipient = campaign.recipients[i];
 
     for (const channel of campaign.channels) {
-      let configured = false;
+      const language = recipient.language || "en";
+      const template = templateMap.get(`${channel}:${language}`);
 
-      if (channel === "email") {
-        const emailProvider = String(process.env.EMAIL_PROVIDER || "smtp")
-          .trim()
-          .toLowerCase();
-
-        if (emailProvider === "gmail-api") {
-          configured = Boolean(
-            process.env.GMAIL_CLIENT_ID?.trim() &&
-            process.env.GMAIL_CLIENT_SECRET?.trim() &&
-            process.env.GMAIL_REFRESH_TOKEN?.trim() &&
-            (process.env.GMAIL_FROM?.trim() || process.env.GMAIL_USER?.trim()),
-          );
-        } else if (emailProvider === "smtp") {
-          configured = Boolean(
-            process.env.SMTP_HOST?.trim() &&
-            (process.env.SMTP_FROM?.trim() || process.env.FROM_EMAIL?.trim()),
-          );
-        }
-      } else if (channel === "sms") {
-        configured = Boolean(
-          process.env.TWILIO_ACCOUNT_SID?.trim() &&
-          process.env.TWILIO_AUTH_TOKEN?.trim() &&
-          process.env.TWILIO_SMS_FROM?.trim(),
-        );
-      } else if (channel === "whatsapp") {
-        configured = Boolean(
-          process.env.WHATSAPP_PHONE_NUMBER_ID?.trim() &&
-          process.env.WHATSAPP_ACCESS_TOKEN?.trim() &&
-          process.env.WHATSAPP_APP_SECRET?.trim() &&
-          process.env.WHATSAPP_GRAPH_VERSION?.trim(),
-        );
-      }
-
-      if (!configured) {
+      if (!template) {
         throw httpError(
-          `The ${channel} provider is not configured. Configure and test it before approving this campaign.`,
+          `No published ${channel} template exists for language ${language}. Configure templates before approving this campaign.`,
         );
       }
+
+      if (channel === "whatsapp" && !template.whatsappTemplateName) {
+        throw httpError(
+          `WhatsApp template for ${language} is missing an approved provider template name`,
+        );
+      }
+
+      const message = buildMessage(template, recipient, campaign, {
+        collegeName,
+        channel,
+      });
+
+      messages.push({
+        recipientIndex: i,
+        name: recipient.name,
+        email: recipient.email,
+        phone: recipient.phone,
+        channel,
+        language,
+        subject: message.subject,
+        body: message.body,
+        whatsappTemplateName: template.whatsappTemplateName || "",
+        whatsappLanguageCode:
+          template.whatsappLanguageCode ||
+          (language === "en" ? "en_US" : language),
+        variables: message.variables,
+        templateId: String(template._id),
+        templateVersion: template.version,
+      });
+
+      versions[`${channel}:${language}`] = {
+        id: String(template._id),
+        version: template.version,
+      };
     }
   }
 
@@ -467,24 +469,40 @@ export async function approveCampaign(req, campaignId, scheduleAt) {
   }
 
   for (const channel of campaign.channels) {
-    const configured =
-      channel === "email"
-        ? Boolean(
-            process.env.SMTP_HOST &&
-            (process.env.SMTP_FROM || process.env.FROM_EMAIL),
-          )
-        : channel === "sms"
-          ? Boolean(
-              process.env.TWILIO_ACCOUNT_SID &&
-              process.env.TWILIO_AUTH_TOKEN &&
-              process.env.TWILIO_SMS_FROM,
-            )
-          : Boolean(
-              process.env.WHATSAPP_PHONE_NUMBER_ID &&
-              process.env.WHATSAPP_ACCESS_TOKEN &&
-              process.env.WHATSAPP_APP_SECRET &&
-              process.env.WHATSAPP_GRAPH_VERSION,
-            );
+    let configured = false;
+
+    if (channel === "email") {
+      const emailProvider = String(process.env.EMAIL_PROVIDER || "smtp")
+        .trim()
+        .toLowerCase();
+
+      if (emailProvider === "gmail-api") {
+        configured = Boolean(
+          process.env.GMAIL_CLIENT_ID?.trim() &&
+          process.env.GMAIL_CLIENT_SECRET?.trim() &&
+          process.env.GMAIL_REFRESH_TOKEN?.trim() &&
+          (process.env.GMAIL_FROM?.trim() || process.env.GMAIL_USER?.trim()),
+        );
+      } else if (emailProvider === "smtp") {
+        configured = Boolean(
+          process.env.SMTP_HOST?.trim() &&
+          (process.env.SMTP_FROM?.trim() || process.env.FROM_EMAIL?.trim()),
+        );
+      }
+    } else if (channel === "sms") {
+      configured = Boolean(
+        process.env.TWILIO_ACCOUNT_SID?.trim() &&
+        process.env.TWILIO_AUTH_TOKEN?.trim() &&
+        process.env.TWILIO_SMS_FROM?.trim(),
+      );
+    } else if (channel === "whatsapp") {
+      configured = Boolean(
+        process.env.WHATSAPP_PHONE_NUMBER_ID?.trim() &&
+        process.env.WHATSAPP_ACCESS_TOKEN?.trim() &&
+        process.env.WHATSAPP_APP_SECRET?.trim() &&
+        process.env.WHATSAPP_GRAPH_VERSION?.trim(),
+      );
+    }
 
     if (!configured) {
       throw httpError(
