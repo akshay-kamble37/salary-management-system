@@ -197,7 +197,8 @@ function Login({ onLogin }) {
             </div>
             <h2>Admin login</h2>
             <p>
-              Upload salary files, manage directories, create campaigns, send notifications and review reports.
+              Upload salary files, manage directories, create campaigns, send
+              notifications and review reports.
             </p>
             <form onSubmit={adminLogin} className="stack">
               <Field
@@ -237,7 +238,11 @@ const navAdmin = [
   { to: "/admin", label: "Overview", icon: LayoutDashboard },
   { to: "/admin/campaigns", label: "Campaigns", icon: Bell },
   { to: "/admin/uploads", label: "Document review", icon: UploadCloud },
-  { to: "/admin/miscellaneous", label: "Miscellaneous directory", icon: ClipboardList },
+  {
+    to: "/admin/miscellaneous",
+    label: "Miscellaneous directory",
+    icon: ClipboardList,
+  },
   { to: "/admin/templates", label: "Message templates", icon: MessageSquare },
   { to: "/admin/content", label: "Website content", icon: Image },
   { to: "/admin/reports", label: "Reports", icon: ClipboardList },
@@ -267,9 +272,7 @@ function Shell({ user, onLogout, children }) {
   const current =
     nav.find((item) => item.to === location.pathname) ||
     nav.find(
-      (item) =>
-        location.pathname.startsWith(item.to) &&
-        item.to !== "/admin",
+      (item) => location.pathname.startsWith(item.to) && item.to !== "/admin",
     ) ||
     nav[0];
   const uiCopy = site.uiCopy?.labels || site.uiCopy || {};
@@ -304,9 +307,7 @@ function Shell({ user, onLogout, children }) {
               <X size={18} />
             </button>
           </div>
-          <div className="role-label">
-            {"ADMINISTRATION"}
-          </div>
+          <div className="role-label">{"ADMINISTRATION"}</div>
           <nav className="side-nav">
             {nav.map((item) => (
               <Link
@@ -403,7 +404,9 @@ function PageHeading({ eyebrow, title, description, action }) {
     }[location.pathname];
     if (!pageKey) return;
     api("/site/content")
-      .then((response) => setDynamic(response.content?.[pageKey]?.content || null))
+      .then((response) =>
+        setDynamic(response.content?.[pageKey]?.content || null),
+      )
       .catch(() => {});
   }, [location.pathname]);
   return (
@@ -415,7 +418,9 @@ function PageHeading({ eyebrow, title, description, action }) {
           <p>{dynamic?.description || dynamic?.subtitle || description}</p>
         )}
       </div>
-      {dynamic?.imageUrl && <img src={dynamic.imageUrl} alt="" className="page-heading-image" />}
+      {dynamic?.imageUrl && (
+        <img src={dynamic.imageUrl} alt="" className="page-heading-image" />
+      )}
       {action}
     </div>
   );
@@ -517,7 +522,8 @@ function UploadsPage() {
     }
   }
   async function deleteUpload(upload) {
-    if (!window.confirm(`Delete uploaded document "${upload.originalName}"?`)) return;
+    if (!window.confirm(`Delete uploaded document "${upload.originalName}"?`))
+      return;
     try {
       await api(`/uploads/${upload._id}`, { method: "DELETE" });
       if (selected?._id === upload._id) setSelected(null);
@@ -574,7 +580,12 @@ function UploadsPage() {
       old.includes(ch) ? old.filter((x) => x !== ch) : [...old, ch],
     );
 
-  const hasSalary = records.some((record) => record.salaryAmount !== undefined && record.salaryAmount !== null && String(record.salaryAmount).trim() !== "");
+  const hasSalary = records.some(
+    (record) =>
+      record.salaryAmount !== undefined &&
+      record.salaryAmount !== null &&
+      String(record.salaryAmount).trim() !== "",
+  );
 
   return (
     <>
@@ -678,23 +689,30 @@ function UploadsPage() {
                   className={`upload-item ${selected?._id === u._id ? "selected" : ""}`}
                   key={u._id}
                 >
-                  <button className="upload-item-main" onClick={() => viewUpload(u)}>
+                  <button
+                    className="upload-item-main"
+                    onClick={() => viewUpload(u)}
+                  >
                     <span className="file-icon">
-                    <FileText size={18} />
+                      <FileText size={18} />
                     </span>
                     <span className="upload-item-text">
-                    <strong>{u.originalName}</strong>
-                    <small>
-                      {u.reference} · {formatDate(u.createdAt)}
-                    </small>
-                    <span className="muted small">
-                      {u.rowCount ?? "—"} rows · {u.validCount ?? "—"} valid ·{" "}
-                      {u.invalidCount ?? "—"} issues
-                    </span>
+                      <strong>{u.originalName}</strong>
+                      <small>
+                        {u.reference} · {formatDate(u.createdAt)}
+                      </small>
+                      <span className="muted small">
+                        {u.rowCount ?? "—"} rows · {u.validCount ?? "—"} valid ·{" "}
+                        {u.invalidCount ?? "—"} issues
+                      </span>
                     </span>
                     <Status value={u.status} />
                   </button>
-                  <Button variant="ghost" className="button-small" onClick={() => deleteUpload(u)}>
+                  <Button
+                    variant="ghost"
+                    className="button-small"
+                    onClick={() => deleteUpload(u)}
+                  >
                     Delete
                   </Button>
                 </div>
@@ -736,14 +754,19 @@ function UploadsPage() {
           ) : null}
           {selected.status === "failed" && (
             <Alert
-              error={selected.errors?.join("; ") || "Processing failed. Re-upload the file after correcting its format."}
+              error={
+                selected.errors?.join("; ") ||
+                "Processing failed. Re-upload the file after correcting its format."
+              }
               onClose={() => {}}
             />
           )}
           {selected.status === "review" && (
             <div className="helper-text">
-              {selected.validCount || 0} valid · {selected.invalidCount || 0} require correction · {selected.duplicateCount || 0} duplicate contacts.
-              Campaign creation remains blocked until every included record is valid.
+              {selected.validCount || 0} valid · {selected.invalidCount || 0}{" "}
+              require correction · {selected.duplicateCount || 0} duplicate
+              contacts. Campaign creation remains blocked until every included
+              record is valid.
             </div>
           )}
           <div className="table-wrap">
@@ -800,7 +823,12 @@ function UploadsPage() {
               >
                 Create campaign and review
               </Button>
-              <p className="helper-text">Select every channel you want included. Provider configuration is checked again during approval; phone numbers must be valid international numbers for SMS or WhatsApp. After creation, review every personalized message before approving delivery.</p>
+              <p className="helper-text">
+                Select every channel you want included. Provider configuration
+                is checked again during approval; phone numbers must be valid
+                international numbers for SMS or WhatsApp. After creation,
+                review every personalized message before approving delivery.
+              </p>
             </div>
           )}
         </section>
@@ -828,7 +856,6 @@ function EditableRecord({ record, onSave, showSalary = false }) {
 
   return (
     <tr>
-
       <td>
         <input
           className="table-input"
@@ -878,9 +905,7 @@ function EditableRecord({ record, onSave, showSalary = false }) {
         <Status value={r.valid ? "valid" : "needs_review"} />
 
         {r.errors?.length > 0 && (
-          <small className="error-small">
-            {r.errors.join("; ")}
-          </small>
+          <small className="error-small">{r.errors.join("; ")}</small>
         )}
       </td>
 
@@ -945,10 +970,7 @@ function CampaignsPage() {
     setError("");
     setSuccess("");
     try {
-      await api(
-        `/admin/campaigns/${id}/${action}`,
-        { method: "POST", body },
-      );
+      await api(`/admin/campaigns/${id}/${action}`, { method: "POST", body });
       setSuccess(
         action === "cancellation-request"
           ? "Cancellation request recorded. An administrator must review it."
@@ -962,7 +984,12 @@ function CampaignsPage() {
     }
   }
   async function deleteCampaign(campaign) {
-    if (!window.confirm(`Delete campaign "${campaign.title}"? Only inactive campaigns can be deleted.`)) return;
+    if (
+      !window.confirm(
+        `Delete campaign "${campaign.title}"? Only inactive campaigns can be deleted.`,
+      )
+    )
+      return;
     setBusyId(`${campaign._id}delete`);
     try {
       await api(`/admin/campaigns/${campaign._id}`, {
@@ -1030,7 +1057,7 @@ function CampaignsPage() {
                         {c.reference} · v{c.version}
                       </small>
                     </td>
-                    <td>{c.recipients?.length || 0}</td>
+                    <td>{c.recipientCount ?? 0}</td>
                     <td>{c.channels?.join(", ")}</td>
                     <td>{formatDate(c.createdAt)}</td>
                     <td>
@@ -1088,7 +1115,15 @@ function CampaignsPage() {
                             </Button>
                           )}
                         {admin &&
-                          ["draft", "awaiting_approval", "rejected", "cancelled", "failed", "completed", "partial_failure"].includes(c.status) && (
+                          [
+                            "draft",
+                            "awaiting_approval",
+                            "rejected",
+                            "cancelled",
+                            "failed",
+                            "completed",
+                            "partial_failure",
+                          ].includes(c.status) && (
                             <Button
                               variant="ghost"
                               className="button-small"
@@ -1374,9 +1409,9 @@ function CampaignDetails({ user }) {
           <div className="review-warning">
             <ShieldCheck size={17} />
             <p>
-              Salary amounts are confidential. Verify the employee,
-              language, contact mapping and message content. The preview is
-              versioned; any content change requires a fresh review.
+              Salary amounts are confidential. Verify the employee, language,
+              contact mapping and message content. The preview is versioned; any
+              content change requires a fresh review.
             </p>
           </div>
           {!preview ? (
@@ -1632,7 +1667,7 @@ function CampaignDetails({ user }) {
             <table>
               <thead>
                 <tr>
-                <th>Contact</th>
+                  <th>Contact</th>
                   <th>Channel</th>
                   <th>Status</th>
                   <th>Attempts</th>
@@ -1792,7 +1827,12 @@ function ReportsPage({ admin = false }) {
     }
   }
   async function deleteReport(report) {
-    if (!window.confirm(`Delete report "${report.reference}" and its generated file?`)) return;
+    if (
+      !window.confirm(
+        `Delete report "${report.reference}" and its generated file?`,
+      )
+    )
+      return;
     try {
       await api(`/reports/${report._id}`, { method: "DELETE" });
       setSuccess("Report deleted.");
@@ -1829,10 +1869,20 @@ function ReportsPage({ admin = false }) {
             <label className="field">
               <span>Report type</span>
               <select value={type} onChange={(e) => setType(e.target.value)}>
-                <option value="campaign-pdf">Single campaign summary · PDF</option>
+                <option value="campaign-pdf">
+                  Single campaign summary · PDF
+                </option>
                 <option value="campaigns-csv">Salary campaigns · CSV</option>
                 <option value="campaigns-xlsx">Salary campaigns · Excel</option>
-                {admin && <><option value="bills-csv">Miscellaneous bills · CSV</option><option value="bills-xlsx">Miscellaneous bills · Excel</option><option value="bills-pdf">Miscellaneous bills · PDF</option></>}
+                {admin && (
+                  <>
+                    <option value="bills-csv">Miscellaneous bills · CSV</option>
+                    <option value="bills-xlsx">
+                      Miscellaneous bills · Excel
+                    </option>
+                    <option value="bills-pdf">Miscellaneous bills · PDF</option>
+                  </>
+                )}
                 <option value="deliveries-xlsx">
                   Delivery details · Excel
                 </option>
@@ -1940,7 +1990,11 @@ function ReportsPage({ admin = false }) {
                       <ArrowDownToLine size={15} /> Download
                     </Button>
                   )}
-                  <Button variant="ghost" className="button-small" onClick={() => deleteReport(r)}>
+                  <Button
+                    variant="ghost"
+                    className="button-small"
+                    onClick={() => deleteReport(r)}
+                  >
                     Delete
                   </Button>
                 </div>
@@ -2124,45 +2178,302 @@ function AdminOverview() {
 }
 
 function MiscellaneousPage() {
-  const [items, setItems] = useState([]); const [q, setQ] = useState("");
-  const [title, setTitle] = useState(""); const [billNumber, setBillNumber] = useState("");
-  const [recipientName, setRecipientName] = useState(""); const [recipientEmail, setRecipientEmail] = useState("");
-  const [organization, setOrganization] = useState(""); const [amount, setAmount] = useState("");
-  const [issueDate, setIssueDate] = useState(""); const [dueDate, setDueDate] = useState(""); const [notes, setNotes] = useState("");
-  const [error, setError] = useState(""); const [success, setSuccess] = useState("");
-  async function load() { const d = await api(`/admin/bills?q=${encodeURIComponent(q)}&limit=100`); setItems(d.items || []); }
-  useEffect(() => { load().catch(e => setError(e.message)); }, []);
-  async function add(e) { e.preventDefault(); setError(""); setSuccess(""); try { const d = await api("/admin/bills", { method: "POST", body: { title, billNumber, recipientName, recipientEmail, organization, amount, issueDate: issueDate || undefined, dueDate: dueDate || undefined, notes } }); setSuccess(`Bill saved: ${d.bill.reference}`); setTitle(""); setBillNumber(""); setRecipientName(""); setRecipientEmail(""); setOrganization(""); setAmount(""); setIssueDate(""); setDueDate(""); setNotes(""); await load(); } catch (e) { setError(e.message); } }
-  async function send(item) { setError(""); setSuccess(""); try { await api(`/admin/bills/${item._id}/send`, { method: "POST", body: {} }); setSuccess(`Bill email sent to ${item.recipientEmail}.`); await load(); } catch (e) { setError(e.message); } }
+  const [items, setItems] = useState([]);
+  const [q, setQ] = useState("");
+  const [title, setTitle] = useState("");
+  const [billNumber, setBillNumber] = useState("");
+  const [recipientName, setRecipientName] = useState("");
+  const [recipientEmail, setRecipientEmail] = useState("");
+  const [organization, setOrganization] = useState("");
+  const [amount, setAmount] = useState("");
+  const [issueDate, setIssueDate] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const [notes, setNotes] = useState("");
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  async function load() {
+    const d = await api(`/admin/bills?q=${encodeURIComponent(q)}&limit=100`);
+    setItems(d.items || []);
+  }
+  useEffect(() => {
+    load().catch((e) => setError(e.message));
+  }, []);
+  async function add(e) {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+    try {
+      const d = await api("/admin/bills", {
+        method: "POST",
+        body: {
+          title,
+          billNumber,
+          recipientName,
+          recipientEmail,
+          organization,
+          amount,
+          issueDate: issueDate || undefined,
+          dueDate: dueDate || undefined,
+          notes,
+        },
+      });
+      setSuccess(`Bill saved: ${d.bill.reference}`);
+      setTitle("");
+      setBillNumber("");
+      setRecipientName("");
+      setRecipientEmail("");
+      setOrganization("");
+      setAmount("");
+      setIssueDate("");
+      setDueDate("");
+      setNotes("");
+      await load();
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+  async function send(item) {
+    setError("");
+    setSuccess("");
+    try {
+      await api(`/admin/bills/${item._id}/send`, { method: "POST", body: {} });
+      setSuccess(`Bill email sent to ${item.recipientEmail}.`);
+      await load();
+    } catch (e) {
+      setError(e.message);
+    }
+  }
   async function editDraft(item) {
     if (item.status !== "draft") return;
     const title = window.prompt("Bill title / purpose", item.title);
     if (title === null) return;
     const amount = window.prompt("Amount (INR)", String(item.amount || ""));
     if (amount === null) return;
-    const recipientEmail = window.prompt("Recipient email", item.recipientEmail);
+    const recipientEmail = window.prompt(
+      "Recipient email",
+      item.recipientEmail,
+    );
     if (recipientEmail === null) return;
     try {
-      await api(`/admin/bills/${item._id}`, { method: "PATCH", body: { title, amount, recipientEmail } });
-      setSuccess("Draft bill updated."); await load();
-    } catch (e) { setError(e.message); }
+      await api(`/admin/bills/${item._id}`, {
+        method: "PATCH",
+        body: { title, amount, recipientEmail },
+      });
+      setSuccess("Draft bill updated.");
+      await load();
+    } catch (e) {
+      setError(e.message);
+    }
   }
   async function removeDraft(item) {
     if (item.status === "sent") return;
-    if (!window.confirm(`Delete bill ${item.reference}? This cannot be undone.`)) return;
-    try { await api(`/admin/bills/${item._id}`, { method: "DELETE", body: {} }); setSuccess("Bill deleted."); await load(); }
-    catch (e) { setError(e.message); }
+    if (
+      !window.confirm(`Delete bill ${item.reference}? This cannot be undone.`)
+    )
+      return;
+    try {
+      await api(`/admin/bills/${item._id}`, { method: "DELETE", body: {} });
+      setSuccess("Bill deleted.");
+      await load();
+    } catch (e) {
+      setError(e.message);
+    }
   }
-  return <>
-    <PageHeading eyebrow="MISCELLANEOUS BILLS" title="Miscellaneous bill management" description="Create and track non-salary bills, record the recipient and amount, and email bill details to the recipient." />
-    <Alert error={error} success={success} onClose={() => { setError(""); setSuccess(""); }} />
-    <section className="panel"><div className="panel-title"><div><h2>Create bill</h2><p className="muted">Add a bill record before sending it by email.</p></div><ClipboardList size={20} className="muted-icon" /></div>
-      <form className="form-grid" onSubmit={add}><Field label="Bill title / purpose" value={title} onChange={e => setTitle(e.target.value)} required /><Field label="Bill number (optional)" value={billNumber} onChange={e => setBillNumber(e.target.value)} /><Field label="Recipient name" value={recipientName} onChange={e => setRecipientName(e.target.value)} required /><Field label="Recipient email" type="email" value={recipientEmail} onChange={e => setRecipientEmail(e.target.value)} required /><Field label="Organization / vendor" value={organization} onChange={e => setOrganization(e.target.value)} /><Field label="Amount (₹)" type="number" value={amount} onChange={e => setAmount(e.target.value)} required /><Field label="Issue date" type="date" value={issueDate} onChange={e => setIssueDate(e.target.value)} /><Field label="Due date" type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} /><label className="field field-span"><span>Notes</span><textarea rows="2" value={notes} onChange={e => setNotes(e.target.value)} placeholder="Bill description or payment instructions" /></label><div className="form-action"><Button type="submit">Save bill</Button></div></form>
-    </section>
-    <section className="panel"><div className="panel-title"><div><h2>Bill records</h2><p className="muted">{items.length} shown</p></div><form className="search-form" onSubmit={e => { e.preventDefault(); load().catch(err => setError(err.message)); }}><Search size={16} /><input value={q} onChange={e => setQ(e.target.value)} placeholder="Search bill, recipient or organization" /><button type="submit">Search</button></form></div>
-      {items.length === 0 ? <Empty title="No bills yet" text="Create a bill using the form above." /> : <div className="table-wrap"><table><thead><tr><th>Reference</th><th>Bill</th><th>Recipient</th><th>Amount</th><th>Due date</th><th>Status</th><th>Action</th></tr></thead><tbody>{items.map(i => <tr key={i._id}><td><strong>{i.reference}</strong></td><td>{i.title}<small>{i.billNumber || ""}</small></td><td>{i.recipientName}<small>{i.recipientEmail}</small></td><td>₹{Number(i.amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td><td>{i.dueDate ? new Date(i.dueDate).toLocaleDateString("en-IN") : "—"}</td><td><Status value={i.status} /></td><td><div className="table-actions"><Button variant="secondary" className="button-small" disabled={i.status === "sent"} onClick={() => send(i)}>{i.status === "failed" ? "Retry email" : "Send email"}</Button>{i.status === "draft" && <Button variant="secondary" className="button-small" onClick={() => editDraft(i)}>Edit draft</Button>}<Button variant="ghost" className="button-small" disabled={i.status === "sent"} onClick={() => removeDraft(i)}>Delete</Button></div></td></tr>)}</tbody></table></div>}
-    </section>
-  </>;
+  return (
+    <>
+      <PageHeading
+        eyebrow="MISCELLANEOUS BILLS"
+        title="Miscellaneous bill management"
+        description="Create and track non-salary bills, record the recipient and amount, and email bill details to the recipient."
+      />
+      <Alert
+        error={error}
+        success={success}
+        onClose={() => {
+          setError("");
+          setSuccess("");
+        }}
+      />
+      <section className="panel">
+        <div className="panel-title">
+          <div>
+            <h2>Create bill</h2>
+            <p className="muted">
+              Add a bill record before sending it by email.
+            </p>
+          </div>
+          <ClipboardList size={20} className="muted-icon" />
+        </div>
+        <form className="form-grid" onSubmit={add}>
+          <Field
+            label="Bill title / purpose"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            required
+          />
+          <Field
+            label="Bill number (optional)"
+            value={billNumber}
+            onChange={(e) => setBillNumber(e.target.value)}
+          />
+          <Field
+            label="Recipient name"
+            value={recipientName}
+            onChange={(e) => setRecipientName(e.target.value)}
+            required
+          />
+          <Field
+            label="Recipient email"
+            type="email"
+            value={recipientEmail}
+            onChange={(e) => setRecipientEmail(e.target.value)}
+            required
+          />
+          <Field
+            label="Organization / vendor"
+            value={organization}
+            onChange={(e) => setOrganization(e.target.value)}
+          />
+          <Field
+            label="Amount (₹)"
+            type="number"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            required
+          />
+          <Field
+            label="Issue date"
+            type="date"
+            value={issueDate}
+            onChange={(e) => setIssueDate(e.target.value)}
+          />
+          <Field
+            label="Due date"
+            type="date"
+            value={dueDate}
+            onChange={(e) => setDueDate(e.target.value)}
+          />
+          <label className="field field-span">
+            <span>Notes</span>
+            <textarea
+              rows="2"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Bill description or payment instructions"
+            />
+          </label>
+          <div className="form-action">
+            <Button type="submit">Save bill</Button>
+          </div>
+        </form>
+      </section>
+      <section className="panel">
+        <div className="panel-title">
+          <div>
+            <h2>Bill records</h2>
+            <p className="muted">{items.length} shown</p>
+          </div>
+          <form
+            className="search-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              load().catch((err) => setError(err.message));
+            }}
+          >
+            <Search size={16} />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search bill, recipient or organization"
+            />
+            <button type="submit">Search</button>
+          </form>
+        </div>
+        {items.length === 0 ? (
+          <Empty
+            title="No bills yet"
+            text="Create a bill using the form above."
+          />
+        ) : (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Reference</th>
+                  <th>Bill</th>
+                  <th>Recipient</th>
+                  <th>Amount</th>
+                  <th>Due date</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((i) => (
+                  <tr key={i._id}>
+                    <td>
+                      <strong>{i.reference}</strong>
+                    </td>
+                    <td>
+                      {i.title}
+                      <small>{i.billNumber || ""}</small>
+                    </td>
+                    <td>
+                      {i.recipientName}
+                      <small>{i.recipientEmail}</small>
+                    </td>
+                    <td>
+                      ₹
+                      {Number(i.amount || 0).toLocaleString("en-IN", {
+                        minimumFractionDigits: 2,
+                      })}
+                    </td>
+                    <td>
+                      {i.dueDate
+                        ? new Date(i.dueDate).toLocaleDateString("en-IN")
+                        : "—"}
+                    </td>
+                    <td>
+                      <Status value={i.status} />
+                    </td>
+                    <td>
+                      <div className="table-actions">
+                        <Button
+                          variant="secondary"
+                          className="button-small"
+                          disabled={i.status === "sent"}
+                          onClick={() => send(i)}
+                        >
+                          {i.status === "failed" ? "Retry email" : "Send email"}
+                        </Button>
+                        {i.status === "draft" && (
+                          <Button
+                            variant="secondary"
+                            className="button-small"
+                            onClick={() => editDraft(i)}
+                          >
+                            Edit draft
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          className="button-small"
+                          disabled={i.status === "sent"}
+                          onClick={() => removeDraft(i)}
+                        >
+                          Delete
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </>
+  );
 }
 
 function TemplatesPage() {
@@ -2248,7 +2559,12 @@ function TemplatesPage() {
     }
   }
   async function removeTemplate(template) {
-    if (!window.confirm(`Delete ${template.channel.toUpperCase()} template version ${template.version}?`)) return;
+    if (
+      !window.confirm(
+        `Delete ${template.channel.toUpperCase()} template version ${template.version}?`,
+      )
+    )
+      return;
     try {
       await api(`/admin/templates/${template._id}`, { method: "DELETE" });
       setSuccess("Template version deleted.");
@@ -2344,10 +2660,9 @@ function TemplatesPage() {
             <div className="helper-box">
               <CircleHelp size={17} />
               <p>
-                Placeholders: {"{{employee_name}}"}, {" "}
-                {"{{salary_amount}}"}, {"{{salary_period}}"},{" "}
-                {"{{campaign_title}}"}, {"{{college_name}}"},{" "}
-                {"{{notification_date}}"}.
+                Placeholders: {"{{employee_name}}"}, {"{{salary_amount}}"},{" "}
+                {"{{salary_period}}"}, {"{{campaign_title}}"},{" "}
+                {"{{college_name}}"}, {"{{notification_date}}"}.
               </p>
             </div>
             <Button type="submit">Save new draft version</Button>
@@ -2491,10 +2806,13 @@ function ContentPage() {
     if (!logoUrl.startsWith("/site-assets/")) return;
     if (!window.confirm("Delete this uploaded image?")) return;
     const name = logoUrl.split("/").pop();
-    const response = await fetch(`/api/admin/site-assets/${encodeURIComponent(name)}`, {
-      method: "DELETE",
-      credentials: "include",
-    });
+    const response = await fetch(
+      `/api/admin/site-assets/${encodeURIComponent(name)}`,
+      {
+        method: "DELETE",
+        credentials: "include",
+      },
+    );
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Image deletion failed");
     setLogoUrl("");
@@ -2514,7 +2832,10 @@ function ContentPage() {
         content = Object.fromEntries(
           labelRows
             .filter(({ label }) => label.trim())
-            .map(({ label, value }) => [label.trim().slice(0, 200), value.slice(0, 500)]),
+            .map(({ label, value }) => [
+              label.trim().slice(0, 200),
+              value.slice(0, 500),
+            ]),
         );
       } else
         content = {
@@ -2599,13 +2920,28 @@ function ContentPage() {
           <label className="field">
             <span>Content section</span>
             <select value={key} onChange={(e) => setKey(e.target.value)}>
-              {(pages.length ? pages : [
-                { key: "home", label: "Home / sign-in", path: "/" },
-                { key: "header", label: "Header / branding", path: "All pages" },
-                { key: "footer", label: "Footer", path: "All pages" },
-                { key: "navigation", label: "Sidebar navigation", path: "All admin pages" },
-                { key: "uiCopy", label: "Shared text labels", path: "All pages" },
-              ]).map((page) => (
+              {(pages.length
+                ? pages
+                : [
+                    { key: "home", label: "Home / sign-in", path: "/" },
+                    {
+                      key: "header",
+                      label: "Header / branding",
+                      path: "All pages",
+                    },
+                    { key: "footer", label: "Footer", path: "All pages" },
+                    {
+                      key: "navigation",
+                      label: "Sidebar navigation",
+                      path: "All admin pages",
+                    },
+                    {
+                      key: "uiCopy",
+                      label: "Shared text labels",
+                      path: "All pages",
+                    },
+                  ]
+              ).map((page) => (
                 <option key={page.key} value={page.key}>
                   {page.label} ({page.path})
                 </option>
@@ -2622,20 +2958,44 @@ function ContentPage() {
               <div className="stack">
                 {labelRows.map((row, index) => (
                   <div className="form-grid" key={`${row.label}-${index}`}>
-                    <Field label="Original text / key" value={row.label} onChange={(e) => {
-                      const next = [...labelRows];
-                      next[index] = { ...row, label: e.target.value };
-                      setLabelRows(next);
-                    }} />
-                    <Field label="Editable replacement" value={row.value} onChange={(e) => {
-                      const next = [...labelRows];
-                      next[index] = { ...row, value: e.target.value };
-                      setLabelRows(next);
-                    }} />
-                    <Button type="button" variant="secondary" onClick={() => setLabelRows(labelRows.filter((_, i) => i !== index))}>Remove</Button>
+                    <Field
+                      label="Original text / key"
+                      value={row.label}
+                      onChange={(e) => {
+                        const next = [...labelRows];
+                        next[index] = { ...row, label: e.target.value };
+                        setLabelRows(next);
+                      }}
+                    />
+                    <Field
+                      label="Editable replacement"
+                      value={row.value}
+                      onChange={(e) => {
+                        const next = [...labelRows];
+                        next[index] = { ...row, value: e.target.value };
+                        setLabelRows(next);
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() =>
+                        setLabelRows(labelRows.filter((_, i) => i !== index))
+                      }
+                    >
+                      Remove
+                    </Button>
                   </div>
                 ))}
-                <Button type="button" variant="secondary" onClick={() => setLabelRows([...labelRows, { label: "", value: "" }])}>Add text label</Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() =>
+                    setLabelRows([...labelRows, { label: "", value: "" }])
+                  }
+                >
+                  Add text label
+                </Button>
               </div>
             </label>
           ) : (
@@ -2704,16 +3064,27 @@ function ContentPage() {
           <div className="panel-title">
             <div>
               <h2>Pages and tabs</h2>
-              <p className="muted">Every listed page can have an editable title, description, image, and shared text labels.</p>
+              <p className="muted">
+                Every listed page can have an editable title, description,
+                image, and shared text labels.
+              </p>
             </div>
           </div>
           <div className="table-wrap">
             <table>
-              <thead><tr><th>Page / tab</th><th>Path</th><th>Editable content</th></tr></thead>
+              <thead>
+                <tr>
+                  <th>Page / tab</th>
+                  <th>Path</th>
+                  <th>Editable content</th>
+                </tr>
+              </thead>
               <tbody>
                 {pages.map((page) => (
                   <tr key={page.key}>
-                    <td><strong>{page.label}</strong></td>
+                    <td>
+                      <strong>{page.label}</strong>
+                    </td>
                     <td>{page.path}</td>
                     <td>Text, title, description, image</td>
                   </tr>
@@ -3413,9 +3784,7 @@ function RouteContent({ user }) {
   if (path === "/admin/audit") return <AuditPage />;
   if (path === "/admin/usage") return <UsagePage />;
   if (path === "/admin/backups") return <BackupPage />;
-  return (
-    <Navigate to="/admin" replace />
-  );
+  return <Navigate to="/admin" replace />;
 }
 
 export default function App() {
