@@ -421,6 +421,10 @@ export async function acknowledgeCampaignReview(req, campaignId, expectedHash) {
   return campaign;
 }
 
+// =================
+// MADE CHNAGES HERE FOR THE Campaign
+// =================
+
 export async function approveCampaign(req, campaignId, scheduleAt) {
   const campaign = await Campaign.findById(campaignId);
 
